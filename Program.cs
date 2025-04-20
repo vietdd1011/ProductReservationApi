@@ -38,7 +38,6 @@ app.MapPost("/reservation", async () =>
         await page.GotoAsync("https://client4901.idosell.com/panel/product-aside.php?action=view&mode=3&stock=2&order_stock=5");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
-        // Lấy dữ liệu từ bảng
         var rows = await page.QuerySelectorAllAsync("table tbody tr");
         var data = new ConcurrentBag<object>(); // thread-safe collection
 
@@ -55,10 +54,7 @@ app.MapPost("/reservation", async () =>
                 {
                     var text = await o.InnerTextAsync();
 
-                    // Quantity
                     var quantity = Regex.Match(text, @"-\s*(\d+)\s+para").Groups[1].Value;
-
-                    // Order Type
                     var orderType = text.ToLower().Contains("shein") ? "shein" : "royal";
 
                     if (!string.IsNullOrEmpty(productCode))
