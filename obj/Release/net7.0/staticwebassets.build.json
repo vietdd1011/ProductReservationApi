@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "HxBEka91c4K7xwLqc0zPrYAeubP8cgqRmSm8TvoVsDc=",
+  "Source": "ProductReservationApi",
+  "BasePath": "_content/ProductReservationApi",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

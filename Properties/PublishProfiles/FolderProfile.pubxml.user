@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<!--
+https://go.microsoft.com/fwlink/?LinkID=208121.
+-->
+<Project>
+  <PropertyGroup>
+    <_PublishTargetUrl>C:\Users\maxis\source\repos\ProductReservationApi\bin\Release\net7.0\publish\</_PublishTargetUrl>
+    <History>True|2025-04-20T00:23:30.0432110Z;True|2025-04-20T02:14:25.5550525+02:00;True|2025-04-19T22:48:21.3594039+02:00;</History>
+    <LastFailureDetails />
+  </PropertyGroup>
+</Project>
