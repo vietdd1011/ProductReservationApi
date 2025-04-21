@@ -370,3 +370,4 @@ C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\refint\Prod
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\ProductReservationApi.pdb
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\ProductReservationApi.genruntimeconfig.cache
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\ref\ProductReservationApi.dll
+C:\Users\maxis\source\repos\ProductReservationApi\bin\Release\net7.0\storageState.json

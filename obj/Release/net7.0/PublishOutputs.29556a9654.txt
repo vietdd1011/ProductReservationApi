@@ -1,6 +1,7 @@
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\ProductReservationApi.exe
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\appsettings.Development.json
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\appsettings.json
+C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\storageState.json
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\.playwright\node\win32_x64\node.exe
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\.playwright\node\LICENSE
 C:\Users\maxis\source\repos\ProductReservationApi\obj\Release\net7.0\PubTmp\Out\.playwright\package\api.json
