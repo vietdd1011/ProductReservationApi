@@ -37,7 +37,7 @@ app.MapPost("/reservation", async () =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = false
+            Headless = true
         });
 
         IBrowserContext contextBrowser;
@@ -121,7 +121,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = false,
+            Headless = true,
         });
 
         IBrowserContext contextBrowser;
@@ -206,7 +206,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         await page.ClickAsync("#fg_save_order");
 
         await browser.CloseAsync();
-        return Results.Ok(new { status = "done", count = reservations.Count });
+        return Results.Ok(new { success = true, count = reservations.Count });
     }
     catch (Exception ex)
     {
