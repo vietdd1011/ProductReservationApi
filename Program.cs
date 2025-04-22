@@ -37,7 +37,7 @@ app.MapPost("/reservation", async () =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true // Để headless khi chạy server
+            Headless = false
         });
 
         IBrowserContext contextBrowser;
@@ -50,21 +50,23 @@ app.MapPost("/reservation", async () =>
             contextBrowser = await browser.NewContextAsync();
         }
         var page = await contextBrowser.NewPageAsync();
-        if (!File.Exists("storageState.json"))
+        var targetUrl = "https://client4901.idosell.com/panel/product-aside.php?action=view&mode=3&stock=2&order_stock=5";
+        await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        if (isLoginFormVisible)
         {
-            await page.GotoAsync("https://client4901.idosell.com");
             await page.FillAsync("#panel_login", "vietdao");
             await page.FillAsync("#panel_password", "Abc@12345");
             await page.ClickAsync("button[type=submit]");
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
             // Lưu lại storage state để dùng cho lần sau
             await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
         }
         else
         {
-            Console.WriteLine("Đang sử dụng session đã lưu.");
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
-        await page.GotoAsync("https://client4901.idosell.com/panel/product-aside.php?action=view&mode=3&stock=2&order_stock=5");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var rows = await page.QuerySelectorAllAsync("table tbody tr");
@@ -114,11 +116,12 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         var body = await new StreamReader(context.Request.Body).ReadToEndAsync();
         var payload = JsonSerializer.Deserialize<ReservationPayload>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         var reservations = payload?.Reservations ?? new List<Reservation>();
+        var docId = payload?.DocId ?? 0;
 
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true,
+            Headless = false,
         });
 
         IBrowserContext contextBrowser;
@@ -131,21 +134,23 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
             contextBrowser = await browser.NewContextAsync();
         }
         var page = await contextBrowser.NewPageAsync();
-        if (!File.Exists("storageState.json"))
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId + "&msg=added";
+        await page.GotoAsync(targetUrl);
+        if (isLoginFormVisible)
         {
-            await page.GotoAsync("https://client4901.idosell.com");
             await page.FillAsync("#panel_login", "vietdao");
             await page.FillAsync("#panel_password", "Abc@12345");
             await page.ClickAsync("button[type=submit]");
             await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
             // Lưu lại storage state để dùng cho lần sau
             await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
         }
         else
         {
-            Console.WriteLine("Đang sử dụng session đã lưu.");
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
-        await page.GotoAsync("https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=7375928&msg=added");
         await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Chọn table summary trong div có id stock-products-document
