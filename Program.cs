@@ -135,7 +135,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         }
         var page = await contextBrowser.NewPageAsync();
         bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
-        var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId + "&msg=added";
+        var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId;
         await page.GotoAsync(targetUrl);
         if (isLoginFormVisible)
         {
