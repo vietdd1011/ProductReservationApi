@@ -4,3 +4,5 @@
 
 /storageState.json
 /.vs
+/bin
+/obj
