@@ -37,18 +37,40 @@ app.MapPost("/reservation", async () =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true
+            Headless = true,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
         IBrowserContext contextBrowser;
         if (File.Exists(storageFilePath))
         {
-            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions { StorageStatePath = storageFilePath });
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
         }
         else
         {
             contextBrowser = await browser.NewContextAsync();
         }
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
+
         var page = await contextBrowser.NewPageAsync();
         var targetUrl = "https://client4901.idosell.com/panel/product-aside.php?action=view&mode=3&stock=2&order_stock=5";
         await page.GotoAsync(targetUrl);
@@ -58,7 +80,6 @@ app.MapPost("/reservation", async () =>
             await page.FillAsync("#panel_login", "vietdao");
             await page.FillAsync("#panel_password", "Abc@12345");
             await page.ClickAsync("button[type=submit]");
-            await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
             // Lưu lại storage state để dùng cho lần sau
             await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
             await page.GotoAsync(targetUrl);
@@ -67,7 +88,6 @@ app.MapPost("/reservation", async () =>
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         var rows = await page.QuerySelectorAllAsync("table tbody tr");
         var data = new ConcurrentBag<object>(); // thread-safe collection
@@ -122,17 +142,38 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
             Headless = true,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
         IBrowserContext contextBrowser;
         if (File.Exists(storageFilePath))
         {
-            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions { StorageStatePath = storageFilePath });
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
         }
         else
         {
             contextBrowser = await browser.NewContextAsync();
         }
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
         var page = await contextBrowser.NewPageAsync();
         bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
         var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId;
@@ -142,7 +183,6 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
             await page.FillAsync("#panel_login", "vietdao");
             await page.FillAsync("#panel_password", "Abc@12345");
             await page.ClickAsync("button[type=submit]");
-            await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
             // Lưu lại storage state để dùng cho lần sau
             await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
             await page.GotoAsync(targetUrl);
@@ -151,7 +191,6 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
-        await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
 
         // Chọn table summary trong div có id stock-products-document
         var table = await page.QuerySelectorAsync("div#stock-products-document table[summary]");
