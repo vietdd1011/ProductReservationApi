@@ -25,7 +25,7 @@ builder.Services.AddCors(options =>
 });
 var app = builder.Build();
 app.UseCors("AllowRFTools");
-app.MapGet("/home", async () =>
+app.MapGet("/home", () =>
 {
     return Results.Ok(new { msg = "ok" });
 });

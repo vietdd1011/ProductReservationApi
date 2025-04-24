@@ -6,3 +6,7 @@
 /.vs
 bin/
 obj/
+/app.yaml
+/cloudbuild.yaml
+/Dockerfile
+/gcloudignore
