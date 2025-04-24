@@ -10,3 +10,4 @@ obj/
 /cloudbuild.yaml
 /Dockerfile
 /gcloudignore
+/publish
