@@ -50,7 +50,6 @@ app.MapPost("/reservation", async () =>
                 BypassCSP = true,
                 RecordVideoDir = null,
                 ViewportSize = null,
-                DisableImages = true,
                 BaseURL = "https://client4901.idosell.com",
                 UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
             });
@@ -155,7 +154,6 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
                 BypassCSP = true,
                 RecordVideoDir = null,
                 ViewportSize = null,
-                DisableImages = true,
                 BaseURL = "https://client4901.idosell.com",
                 UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
             });
