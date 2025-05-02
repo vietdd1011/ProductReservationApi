@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using System.Collections.Concurrent;
 using ProductReservationApi.Models;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using System;
+using System.Reflection;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -175,9 +177,9 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
             }
         });
         var page = await contextBrowser.NewPageAsync();
-        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
         var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId;
         await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
         if (isLoginFormVisible)
         {
             await page.FillAsync("#panel_login", "vietdao");
@@ -246,6 +248,98 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
 
         await browser.CloseAsync();
         return Results.Ok(new { success = true, count = reservations.Count });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("Lỗi: " + ex.Message);
+    }
+});
+
+app.MapPost("/allegro/mapping", async (ProductOfferPayload payload) =>
+{
+    try
+    {
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = false,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
+        });
+
+        IBrowserContext contextBrowser;
+        if (File.Exists(storageFilePath))
+        {
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
+        }
+        else
+        {
+            contextBrowser = await browser.NewContextAsync();
+        }
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
+        var page = await contextBrowser.NewPageAsync();
+        var targetUrl = "https://client4901.idosell.com/panel/import-auctions.php?type=map";
+        await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        if (isLoginFormVisible)
+        {
+            await page.FillAsync("#panel_login", "vietdao");
+            await page.FillAsync("#panel_password", "Abc@12345");
+            await page.ClickAsync("button[type=submit]");
+            // Lưu lại storage state để dùng cho lần sau
+            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
+        }
+        else
+        {
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+
+        var buttonNewMapping = page.ClickAsync("#btnNewImport");
+        await page.WaitForSelectorAsync("#jsfg_importType_1", new() { State = WaitForSelectorState.Visible });
+        var checkbox = await page.QuerySelectorAsync("#jsfg_importType_1");
+        if (checkbox != null)
+        {
+            bool isChecked = await checkbox.IsCheckedAsync();
+            if (!isChecked)
+            {
+                await checkbox.CheckAsync();
+            }
+        }
+        else
+        {
+            Console.WriteLine("Không tìm thấy checkbox #jsfg_importType_1.");
+        }
+        await page.ClickAsync("#choice_import_toplayer");
+        await page.WaitForSelectorAsync("#new_import_toplayer_h", new() { State = WaitForSelectorState.Visible });
+
+        var textareaContent = string.Join(Environment.NewLine,payload.ProductOffers.Select(po => $"{po.OfferId};{po.ProductId};;"));
+        await page.FillAsync("#fg_textImport", textareaContent);
+
+        await page.ClickAsync("#btnPrepareImport");
+
+        //await browser.CloseAsync();
+        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        //Console.ReadLine(); // giữ thread mở
+        return Results.Ok(new { success = true });
     }
     catch (Exception ex)
     {
