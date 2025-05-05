@@ -336,11 +336,11 @@ app.MapPost("/allegro/mapping", async (HttpRequest request) =>
 
         await page.FillAsync("#fg_textImport", payload);
 
-        //await page.ClickAsync("#btnPrepareImport");
+        await page.ClickAsync("#btnPrepareImport");
 
-        //await browser.CloseAsync();
-        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        Console.ReadLine(); // giữ thread mở
+        await browser.CloseAsync();
+        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        //Console.ReadLine(); // giữ thread mở
         return Results.Ok(new { success = true });
     }
     catch (Exception ex)
