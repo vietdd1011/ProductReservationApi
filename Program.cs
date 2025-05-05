@@ -255,10 +255,13 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
     }
 });
 
-app.MapPost("/allegro/mapping", async (ProductOfferPayload payload) =>
+app.MapPost("/allegro/mapping", async (HttpRequest request) =>
 {
     try
     {
+        using var reader = new StreamReader(request.Body);
+        var payload = await reader.ReadToEndAsync(); // Lấy chuỗi string từ request body
+
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
@@ -331,14 +334,13 @@ app.MapPost("/allegro/mapping", async (ProductOfferPayload payload) =>
         await page.ClickAsync("#choice_import_toplayer");
         await page.WaitForSelectorAsync("#new_import_toplayer_h", new() { State = WaitForSelectorState.Visible });
 
-        var textareaContent = string.Join(Environment.NewLine,payload.ProductOffers.Select(po => $"{po.OfferId};{po.ProductId};;"));
-        await page.FillAsync("#fg_textImport", textareaContent);
+        await page.FillAsync("#fg_textImport", payload);
 
-        await page.ClickAsync("#btnPrepareImport");
+        //await page.ClickAsync("#btnPrepareImport");
 
         //await browser.CloseAsync();
-        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        //Console.ReadLine(); // giữ thread mở
+        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        Console.ReadLine(); // giữ thread mở
         return Results.Ok(new { success = true });
     }
     catch (Exception ex)
