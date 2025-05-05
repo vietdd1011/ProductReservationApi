@@ -255,6 +255,145 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
     }
 });
 
+
+app.MapPost("/allegro/finish-mapping", async () =>
+{
+    try
+    {
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = false,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
+        });
+
+        IBrowserContext contextBrowser;
+        if (File.Exists(storageFilePath))
+        {
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
+        }
+        else
+        {
+            contextBrowser = await browser.NewContextAsync();
+        }
+        //await contextBrowser.RouteAsync("**/*", async route =>
+        //{
+        //    var req = route.Request;
+        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+        //    {
+        //        await route.AbortAsync();
+        //    }
+        //    else
+        //    {
+        //        await route.ContinueAsync();
+        //    }
+        //});
+        var page = await contextBrowser.NewPageAsync();
+        var targetUrl = "https://client4901.idosell.com/panel/import-auctions.php?type=map";
+        await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        if (isLoginFormVisible)
+        {
+            await page.FillAsync("#panel_login", "vietdao");
+            await page.FillAsync("#panel_password", "Abc@12345");
+            await page.ClickAsync("button[type=submit]");
+            // Lưu lại storage state để dùng cho lần sau
+            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
+        }
+        else
+        {
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+        await page.WaitForSelectorAsync("table.t6");
+        var rows = await page.QuerySelectorAllAsync("table.t6 > tbody > tr:not(:first-child)");
+        foreach (var row in rows)
+        {
+            var cells = await row.QuerySelectorAllAsync("td");
+
+            if (cells.Count < 9)
+                continue;
+
+            var statusText = await cells[4].InnerTextAsync();
+            var mappedListings = await cells[6].InnerTextAsync();
+
+            if (statusText.Trim() == "Ready for mapping" && mappedListings.Trim() == "0")
+            {
+                var actionCell = cells[8];
+                var viewLink = await actionCell.QuerySelectorAsync("a");
+                if (viewLink != null)
+                {
+                    await viewLink.ClickAsync();
+                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                    break;
+                }
+            }
+        }
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('fg_checkAll');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+        await page.WaitForSelectorAsync("#select_on_self", new() { Timeout = 5000 });
+        await page.ClickAsync("#select_on_self");
+
+        await page.WaitForSelectorAsync("#btnImport", new() { Timeout = 5000 });
+        await page.ClickAsync("#btnImport");
+
+        await page.SelectOptionAsync("#fg_preset", new SelectOptionValue { Label = "royal_fashion" });
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('reimport_auction_parameters');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('generate_responsible_entities');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('reimport_auction_variant_offers');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('reimport_productization');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('generate_shop_params');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+
+        await page.ClickAsync("#choice_import_auctions_toplayer");
+
+        //await browser.CloseAsync();
+        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        Console.ReadLine(); // giữ thread mở
+        return Results.Ok(new { success = true });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("Lỗi: " + ex.Message);
+    }
+});
+
 app.MapPost("/allegro/mapping", async (HttpRequest request) =>
 {
     try
@@ -265,7 +404,7 @@ app.MapPost("/allegro/mapping", async (HttpRequest request) =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = false,
+            Headless = true,
             Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
