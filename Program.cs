@@ -315,13 +315,23 @@ app.MapPost("/allegro/finish-mapping", async () =>
         }
         await page.WaitForSelectorAsync("table.t6");
         var rows = await page.QuerySelectorAllAsync("table.t6 > tbody > tr:not(:first-child)");
+        bool found = false;
         foreach (var row in rows)
         {
             var cells = await row.QuerySelectorAllAsync("td");
 
             if (cells.Count < 9)
                 continue;
-
+            var dateText = await cells[0].InnerTextAsync();
+            if (DateTime.TryParse(dateText.Trim(), out var parsedDate))
+            {
+                if (parsedDate.Date < new DateTime(2025, 5, 5))
+                    continue;
+            }
+            else
+            {
+                continue;
+            }
             var statusText = await cells[4].InnerTextAsync();
             var waitingListingsText = await cells[5].InnerTextAsync();
             var mappedListingsText = await cells[6].InnerTextAsync();
@@ -339,9 +349,14 @@ app.MapPost("/allegro/finish-mapping", async () =>
                 {
                     await viewLink.ClickAsync();
                     await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
+                    found = true;
                     break;
                 }
             }
+        }
+        if (!found)
+        {
+            return Results.Ok(new { success = true });
         }
         await page.EvaluateAsync(@"() => {
             const cb = document.getElementById('fg_checkAll');
