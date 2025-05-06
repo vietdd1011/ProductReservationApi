@@ -323,9 +323,15 @@ app.MapPost("/allegro/finish-mapping", async () =>
                 continue;
 
             var statusText = await cells[4].InnerTextAsync();
-            var mappedListings = await cells[6].InnerTextAsync();
+            var waitingListingsText = await cells[5].InnerTextAsync();
+            var mappedListingsText = await cells[6].InnerTextAsync();
+            var errorListingsText = await cells[7].InnerTextAsync();
 
-            if (statusText.Trim() == "Ready for mapping" && mappedListings.Trim() == "0")
+            int waitingListings = int.Parse(waitingListingsText.Trim());
+            int mappedListings = int.Parse(mappedListingsText.Trim());
+            int errorListings = int.Parse(errorListingsText.Trim());
+
+            if (statusText.Trim() == "Ready for mapping" && waitingListings > (mappedListings + errorListings))
             {
                 var actionCell = cells[8];
                 var viewLink = await actionCell.QuerySelectorAsync("a");
@@ -383,9 +389,19 @@ app.MapPost("/allegro/finish-mapping", async () =>
 
         await page.ClickAsync("#choice_import_auctions_toplayer");
 
-        //await browser.CloseAsync();
-        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        Console.ReadLine(); // giữ thread mở
+        await page.Locator("#info_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Visible });
+        await page.EvaluateAsync(@"() => {
+            const cb = document.getElementById('jsfg_ignore_0');
+            if (cb && !cb.checked) {
+                cb.click();
+            }
+        }");
+        await page.ClickAsync("#btnInfo");
+        await page.Locator("#import_wait-content").WaitForAsync(new() { State = WaitForSelectorState.Detached });
+
+        await browser.CloseAsync();
+        // Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        // Console.ReadLine(); // giữ thread mở
         return Results.Ok(new { success = true });
     }
     catch (Exception ex)
