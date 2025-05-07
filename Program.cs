@@ -8,6 +8,7 @@ using ProductReservationApi.Models;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using System;
 using System.Reflection;
+using System.Diagnostics;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -263,7 +264,7 @@ app.MapPost("/allegro/finish-mapping", async () =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true,
+            Headless = false,
             Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
@@ -284,18 +285,18 @@ app.MapPost("/allegro/finish-mapping", async () =>
         {
             contextBrowser = await browser.NewContextAsync();
         }
-        await contextBrowser.RouteAsync("**/*", async route =>
-        {
-            var req = route.Request;
-            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-            {
-                await route.AbortAsync();
-            }
-            else
-            {
-                await route.ContinueAsync();
-            }
-        });
+        //await contextBrowser.RouteAsync("**/*", async route =>
+        //{
+        //    var req = route.Request;
+        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+        //    {
+        //        await route.AbortAsync();
+        //    }
+        //    else
+        //    {
+        //        await route.ContinueAsync();
+        //    }
+        //});
         var page = await contextBrowser.NewPageAsync();
         var targetUrl = "https://client4901.idosell.com/panel/import-auctions.php?type=map";
         await page.GotoAsync(targetUrl);
@@ -341,7 +342,7 @@ app.MapPost("/allegro/finish-mapping", async () =>
             int mappedListings = int.Parse(mappedListingsText.Trim());
             int errorListings = int.Parse(errorListingsText.Trim());
 
-            if (statusText.Trim() == "Ready for mapping" && waitingListings > (mappedListings + errorListings))
+            if ((statusText.Trim() == "Ready for mapping" || statusText.Trim() == "Gotowe do mapowania") && waitingListings > (mappedListings + errorListings))
             {
                 var actionCell = cells[8];
                 var viewLink = await actionCell.QuerySelectorAsync("a");
@@ -404,15 +405,58 @@ app.MapPost("/allegro/finish-mapping", async () =>
 
         await page.ClickAsync("#choice_import_auctions_toplayer");
 
-        await page.Locator("#info_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Visible });
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('jsfg_ignore_0');
-            if (cb && !cb.checked) {
-                cb.click();
+        await Task.WhenAny(
+            page.Locator("#info_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 10000 }),
+            page.Locator("#err_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 10000 })
+        );
+        while (true)
+        {
+            bool infoVisible = await page.Locator("#info_toplayer_h").IsVisibleAsync();
+            bool errorVisible = await page.Locator("#err_toplayer_h").IsVisibleAsync();
+
+            if (!infoVisible && !errorVisible)
+            {
+                Debug.WriteLine("khong hien thi nua");
+                break; // Không còn popup nào nữa, thoát vòng lặp
             }
-        }");
-        await page.ClickAsync("#btnInfo");
-        await page.Locator("#import_wait-content").WaitForAsync(new() { State = WaitForSelectorState.Detached });
+
+            if (infoVisible)
+            {
+                Debug.WriteLine("infor");
+
+                var checkboxInfo = page.Locator("#jsfg_ignore_0");
+                await checkboxInfo.WaitForAsync(new() { State = WaitForSelectorState.Visible });
+                await page.EvaluateAsync(@"() => {
+                    const cb = document.getElementById('jsfg_ignore_0');
+                    if (cb && !cb.checked) {
+                        cb.click();
+                    }
+                }");
+                await page.ClickAsync("#btnInfo");
+                await page.Locator("#info_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Hidden });
+            }
+
+            if (errorVisible)
+            {
+                Debug.WriteLine("error");
+
+                var checkboxError = page.Locator("#jsfg_ignoreError_0");
+                await checkboxError.WaitForAsync(new() { State = WaitForSelectorState.Visible });
+                await page.EvaluateAsync(@"() => {
+                    const cb = document.getElementById('jsfg_ignoreError_0');
+                    if (cb && !cb.checked) {
+                        cb.click();
+                    }
+                }");
+                await page.ClickAsync("#btnError");
+                await page.Locator("#err_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Hidden });
+            }
+        }
+        await page.Locator("#import_wait-content").WaitForAsync(new()
+        {
+            State = WaitForSelectorState.Hidden,
+            Timeout = 60000
+        });
 
         await browser.CloseAsync();
         // Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
