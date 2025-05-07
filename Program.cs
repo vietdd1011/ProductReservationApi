@@ -264,7 +264,7 @@ app.MapPost("/allegro/finish-mapping", async () =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = false,
+            Headless = true,
             Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
@@ -285,18 +285,18 @@ app.MapPost("/allegro/finish-mapping", async () =>
         {
             contextBrowser = await browser.NewContextAsync();
         }
-        //await contextBrowser.RouteAsync("**/*", async route =>
-        //{
-        //    var req = route.Request;
-        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-        //    {
-        //        await route.AbortAsync();
-        //    }
-        //    else
-        //    {
-        //        await route.ContinueAsync();
-        //    }
-        //});
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
         var page = await contextBrowser.NewPageAsync();
         var targetUrl = "https://client4901.idosell.com/panel/import-auctions.php?type=map";
         await page.GotoAsync(targetUrl);
