@@ -228,7 +228,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
                         if (orderText == res.OrderNumber)
                         {
                             // Lấy nút Add tương ứng trong dòng đó
-                            var img = await orderRow.QuerySelectorAsync("img[alt='Add to invoice']");
+                            var img = await orderRow.QuerySelectorAsync("img[alt='Add to invoice'], img[alt='Dodaj do faktury']");
                             if (img != null)
                             {
                                 await img.WaitForElementStateAsync(ElementState.Visible);
