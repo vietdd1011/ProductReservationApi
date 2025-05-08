@@ -261,6 +261,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         {
             // Không tìm thấy nút trong thời gian cho phép -> bỏ qua
         }
+        await Task.Delay(1000);
 
         await page.WaitForSelectorAsync("#msg_line_msg", new PageWaitForSelectorOptions
         {
@@ -345,6 +346,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
             await page.WaitForSelectorAsync("#IAIsimpleConfirm_h", new() { Timeout = 5000 });
             await page.ClickAsync("#yui-gen0-button");
         }
+        //Console.ReadLine();
         await browser.CloseAsync();
         return Results.Ok(new { success = true, removedRow = removedRow });
     }
