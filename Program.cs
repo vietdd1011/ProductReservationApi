@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using System;
 using System.Reflection;
 using System.Diagnostics;
-
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 var storageFilePath = Path.Combine(builder.Environment.ContentRootPath, "storageState.json");
@@ -144,7 +144,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = false,
+            Headless = true,
             Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
@@ -165,18 +165,18 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         {
             contextBrowser = await browser.NewContextAsync();
         }
-        //await contextBrowser.RouteAsync("**/*", async route =>
-        //{
-        //    var req = route.Request;
-        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-        //    {
-        //        await route.AbortAsync();
-        //    }
-        //    else
-        //    {
-        //        await route.ContinueAsync();
-        //    }
-        //});
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
         var page = await contextBrowser.NewPageAsync();
         var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId;
         await page.GotoAsync(targetUrl);
@@ -205,7 +205,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         var rows = await table.QuerySelectorAllAsync("tbody > tr");
 
         // Tìm theo productCode và orderNumber để click đúng số lượng
-        var errors = 0;
+        var removedRow = new List<string>();
         foreach (var res in reservations)
         {
             foreach (var row in rows)
@@ -259,13 +259,14 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
 
                                 if (hasRed)
                                 {
-                                    errors += 1;
                                     await row.EvaluateAsync(@"(r) => {
                                         const cb = r.querySelector('td input[type=checkbox]');
                                         if (cb && !cb.checked) {
                                             cb.click();
                                         }
                                     }");
+                                    string errorRow = JsonSerializer.Serialize(res);
+                                    removedRow.Add(errorRow);
                                 }
                             }
                         }
@@ -273,18 +274,32 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
                 }
             }
         }
-        if (errors > 0)
+        if (removedRow.Count > 0)
         {
             await page.ClickAsync("#fg_delsel");
             await page.WaitForSelectorAsync("#IAIsimpleConfirm_h", new() { Timeout = 5000 });
             await page.ClickAsync("#yui-gen0-button");
         }
 
-        await page.WaitForSelectorAsync("#fg_save_order", new PageWaitForSelectorOptions { State = WaitForSelectorState.Visible });
-        await page.ClickAsync("#fg_save_order");
+        try
+        {
+            var saveButton = await page.WaitForSelectorAsync("#fg_save_order", new PageWaitForSelectorOptions
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 3000
+            });
 
+            if (saveButton != null)
+            {
+                await saveButton.ClickAsync();
+            }
+        }
+        catch (TimeoutException)
+        {
+            // Không tìm thấy nút trong thời gian cho phép -> bỏ qua
+        }
         await browser.CloseAsync();
-        return Results.Ok(new { success = true, count = reservations.Count });
+        return Results.Ok(new { success = true, removedRow = removedRow });
     }
     catch (Exception ex)
     {
