@@ -238,49 +238,12 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
                                 {
                                     await img.ClickAsync();
                                 }
-                                await Task.Delay(200);
-                                var inputs = await orderRow.QuerySelectorAllAsync("input[type='text']");
-                                var hasRed = false;
-                                foreach (var input in inputs)
-                                {
-                                    var styles = await input.EvaluateAsync<string[]>(@"el => {
-                                        const cs = window.getComputedStyle(el);
-                                        return [cs.color, cs.borderColor];
-                                    }");
-                                    var color = styles[0];
-                                    var borderColor = styles[1];
-
-                                    if (color == "rgb(255, 0, 0)" || borderColor == "rgb(255, 0, 0)")
-                                    {
-                                        Console.WriteLine("❗ Input có màu đỏ.");
-                                        hasRed = true;
-                                    }
-                                }
-
-                                if (hasRed)
-                                {
-                                    await row.EvaluateAsync(@"(r) => {
-                                        const cb = r.querySelector('td input[type=checkbox]');
-                                        if (cb && !cb.checked) {
-                                            cb.click();
-                                        }
-                                    }");
-                                    string errorRow = JsonSerializer.Serialize(res);
-                                    removedRow.Add(errorRow);
-                                }
                             }
                         }
                     }
                 }
             }
         }
-        if (removedRow.Count > 0)
-        {
-            await page.ClickAsync("#fg_delsel");
-            await page.WaitForSelectorAsync("#IAIsimpleConfirm_h", new() { Timeout = 5000 });
-            await page.ClickAsync("#yui-gen0-button");
-        }
-
         try
         {
             var saveButton = await page.WaitForSelectorAsync("#fg_save_order", new PageWaitForSelectorOptions
@@ -297,6 +260,90 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         catch (TimeoutException)
         {
             // Không tìm thấy nút trong thời gian cho phép -> bỏ qua
+        }
+
+        await page.WaitForSelectorAsync("#msg_line_msg", new PageWaitForSelectorOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 5000
+        });
+
+        await page.WaitForSelectorAsync("div#stock-products-document table[summary]", new PageWaitForSelectorOptions
+        {
+            State = WaitForSelectorState.Visible,
+            Timeout = 5000 // hoặc nhiều hơn tùy tình huống
+        });
+
+        table = await page.QuerySelectorAsync("div#stock-products-document table[summary]");
+        if (table == null)
+        {
+            throw new Exception("Không tìm thấy table summary trong div#stock-products-document");
+        }
+
+        rows = await table.QuerySelectorAllAsync("tbody > tr");
+        foreach (var res in reservations)
+        {
+            foreach (var row in rows)
+            {
+                var codeCell = await row.QuerySelectorAsync("td:nth-child(3)");
+                if (codeCell == null) continue;
+
+                var text = await codeCell.InnerTextAsync();
+                var code = text.Split('\n')[0].Trim();
+
+                if (code == res.ProductCode)
+                {
+                    // Duyệt các dòng đơn hàng trong cột Quantity (cột 5)
+                    var nestedRows = await row.QuerySelectorAllAsync("td:nth-child(5) table tbody tr");
+                    foreach (var orderRow in nestedRows)
+                    {
+                        // Lấy số order
+                        var anchor = await orderRow.QuerySelectorAsync("a");
+                        var orderText = anchor != null ? (await anchor.InnerTextAsync()).Trim() : string.Empty;
+
+                        if (orderText == res.OrderNumber)
+                        {
+                            // Lấy nút Add tương ứng trong dòng đó
+                            await Task.Delay(200);
+                            var inputs = await orderRow.QuerySelectorAllAsync("input[type='text']");
+                            var hasRed = false;
+                            foreach (var input in inputs)
+                            {
+                                var styles = await input.EvaluateAsync<string[]>(@"el => {
+                                        const cs = window.getComputedStyle(el);
+                                        return [cs.color, cs.borderColor];
+                                    }");
+                                var color = styles[0];
+                                var borderColor = styles[1];
+
+                                if (color == "rgb(255, 0, 0)" || borderColor == "rgb(255, 0, 0)")
+                                {
+                                    Console.WriteLine("❗ Input có màu đỏ.");
+                                    hasRed = true;
+                                }
+                            }
+
+                            if (hasRed)
+                            {
+                                await row.EvaluateAsync(@"(r) => {
+                                        const cb = r.querySelector('td input[type=checkbox]');
+                                        if (cb && !cb.checked) {
+                                            cb.click();
+                                        }
+                                    }");
+                                string errorRow = JsonSerializer.Serialize(res);
+                                removedRow.Add(errorRow);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if (removedRow.Count > 0)
+        {
+            await page.ClickAsync("#fg_delsel");
+            await page.WaitForSelectorAsync("#IAIsimpleConfirm_h", new() { Timeout = 5000 });
+            await page.ClickAsync("#yui-gen0-button");
         }
         await browser.CloseAsync();
         return Results.Ok(new { success = true, removedRow = removedRow });
