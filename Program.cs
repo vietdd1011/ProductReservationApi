@@ -271,7 +271,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         await page.WaitForSelectorAsync("div#stock-products-document table[summary]", new PageWaitForSelectorOptions
         {
             State = WaitForSelectorState.Visible,
-            Timeout = 5000 // hoặc nhiều hơn tùy tình huống
+            Timeout = 5000
         });
 
         table = await page.QuerySelectorAsync("div#stock-products-document table[summary]");
