@@ -144,7 +144,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true,
+            Headless = false,
             Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
 
@@ -165,18 +165,18 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         {
             contextBrowser = await browser.NewContextAsync();
         }
-        await contextBrowser.RouteAsync("**/*", async route =>
-        {
-            var req = route.Request;
-            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-            {
-                await route.AbortAsync();
-            }
-            else
-            {
-                await route.ContinueAsync();
-            }
-        });
+        //await contextBrowser.RouteAsync("**/*", async route =>
+        //{
+        //    var req = route.Request;
+        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+        //    {
+        //        await route.AbortAsync();
+        //    }
+        //    else
+        //    {
+        //        await route.ContinueAsync();
+        //    }
+        //});
         var page = await contextBrowser.NewPageAsync();
         var targetUrl = "https://client4901.idosell.com/panel/stocks-dislocate.php?action=edit&document_id=" + docId;
         await page.GotoAsync(targetUrl);
@@ -205,6 +205,7 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         var rows = await table.QuerySelectorAllAsync("tbody > tr");
 
         // Tìm theo productCode và orderNumber để click đúng số lượng
+        var errors = 0;
         foreach (var res in reservations)
         {
             foreach (var row in rows)
@@ -237,11 +238,46 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
                                 {
                                     await img.ClickAsync();
                                 }
+                                await Task.Delay(200);
+                                var inputs = await orderRow.QuerySelectorAllAsync("input[type='text']");
+                                var hasRed = false;
+                                foreach (var input in inputs)
+                                {
+                                    var styles = await input.EvaluateAsync<string[]>(@"el => {
+                                        const cs = window.getComputedStyle(el);
+                                        return [cs.color, cs.borderColor];
+                                    }");
+                                    var color = styles[0];
+                                    var borderColor = styles[1];
+
+                                    if (color == "rgb(255, 0, 0)" || borderColor == "rgb(255, 0, 0)")
+                                    {
+                                        Console.WriteLine("❗ Input có màu đỏ.");
+                                        hasRed = true;
+                                    }
+                                }
+
+                                if (hasRed)
+                                {
+                                    errors += 1;
+                                    await row.EvaluateAsync(@"(r) => {
+                                        const cb = r.querySelector('td input[type=checkbox]');
+                                        if (cb && !cb.checked) {
+                                            cb.click();
+                                        }
+                                    }");
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+        if (errors > 0)
+        {
+            await page.ClickAsync("#fg_delsel");
+            await page.WaitForSelectorAsync("#IAIsimpleConfirm_h", new() { Timeout = 5000 });
+            await page.ClickAsync("#yui-gen0-button");
         }
 
         await page.WaitForSelectorAsync("#fg_save_order", new PageWaitForSelectorOptions { State = WaitForSelectorState.Visible });
