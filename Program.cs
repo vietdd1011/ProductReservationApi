@@ -91,6 +91,11 @@ app.MapPost("/reservation", async () =>
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
+        var button = await page.QuerySelectorAsync("button.btn__recovery_password");
+        if (button != null)
+        {
+            await button.ClickAsync();
+        }
 
         var rows = await page.QuerySelectorAllAsync("table tbody tr");
         var data = new ConcurrentBag<object>(); // thread-safe collection
@@ -193,6 +198,11 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
         else
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+        var button = await page.QuerySelectorAsync("button.btn__recovery_password");
+        if (button != null)
+        {
+            await button.ClickAsync();
         }
 
         // Chọn table summary trong div có id stock-products-document
@@ -356,219 +366,6 @@ app.MapPost("/update-reservation", async (HttpContext context) =>
     }
 });
 
-
-app.MapPost("/allegro/finish-mapping", async () =>
-{
-    try
-    {
-        using var playwright = await Playwright.CreateAsync();
-        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
-        {
-            Headless = true,
-            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
-        });
-
-        IBrowserContext contextBrowser;
-        if (File.Exists(storageFilePath))
-        {
-            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
-            {
-                StorageStatePath = storageFilePath,
-                BypassCSP = true,
-                RecordVideoDir = null,
-                ViewportSize = null,
-                BaseURL = "https://client4901.idosell.com",
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-            });
-        }
-        else
-        {
-            contextBrowser = await browser.NewContextAsync();
-        }
-        await contextBrowser.RouteAsync("**/*", async route =>
-        {
-            var req = route.Request;
-            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-            {
-                await route.AbortAsync();
-            }
-            else
-            {
-                await route.ContinueAsync();
-            }
-        });
-        var page = await contextBrowser.NewPageAsync();
-        var targetUrl = "https://client4901.idosell.com/panel/import-auctions.php?type=map";
-        await page.GotoAsync(targetUrl);
-        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
-        if (isLoginFormVisible)
-        {
-            await page.FillAsync("#panel_login", "vietdao");
-            await page.FillAsync("#panel_password", "Abc@12345");
-            await page.ClickAsync("button[type=submit]");
-            // Lưu lại storage state để dùng cho lần sau
-            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
-            await page.GotoAsync(targetUrl);
-        }
-        else
-        {
-            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
-        }
-        await page.WaitForSelectorAsync("table.t6");
-        var rows = await page.QuerySelectorAllAsync("table.t6 > tbody > tr:not(:first-child)");
-        bool found = false;
-        foreach (var row in rows)
-        {
-            var cells = await row.QuerySelectorAllAsync("td");
-
-            if (cells.Count < 9)
-                continue;
-            var dateText = await cells[0].InnerTextAsync();
-            if (DateTime.TryParse(dateText.Trim(), out var parsedDate))
-            {
-                if (parsedDate.Date < new DateTime(2025, 5, 5))
-                    continue;
-            }
-            else
-            {
-                continue;
-            }
-            var statusText = await cells[4].InnerTextAsync();
-            var waitingListingsText = await cells[5].InnerTextAsync();
-            var mappedListingsText = await cells[6].InnerTextAsync();
-            var errorListingsText = await cells[7].InnerTextAsync();
-
-            int waitingListings = int.Parse(waitingListingsText.Trim());
-            int mappedListings = int.Parse(mappedListingsText.Trim());
-            int errorListings = int.Parse(errorListingsText.Trim());
-
-            if ((statusText.Trim() == "Ready for mapping" || statusText.Trim() == "Gotowe do mapowania") && waitingListings > (mappedListings + errorListings))
-            {
-                var actionCell = cells[8];
-                var viewLink = await actionCell.QuerySelectorAsync("a");
-                if (viewLink != null)
-                {
-                    await viewLink.ClickAsync();
-                    await page.WaitForLoadStateAsync(LoadState.NetworkIdle);
-                    found = true;
-                    break;
-                }
-            }
-        }
-        if (!found)
-        {
-            return Results.Ok(new { success = true });
-        }
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('fg_checkAll');
-            if (cb && !cb.checked) {
-                cb.click();
-            }
-        }");
-        await page.WaitForSelectorAsync("#select_on_self", new() { Timeout = 5000 });
-        await page.ClickAsync("#select_on_self");
-
-        await page.WaitForSelectorAsync("#btnImport", new() { Timeout = 5000 });
-        await page.ClickAsync("#btnImport");
-
-        await page.SelectOptionAsync("#fg_preset", new SelectOptionValue { Label = "royal_fashion" });
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('reimport_auction_parameters');
-            if (cb && !cb.checked) {
-                cb.click();
-            }
-        }");
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('generate_responsible_entities');
-            if (cb && !cb.checked) {
-                cb.click();
-            }
-        }");
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('reimport_auction_variant_offers');
-            if (cb && !cb.checked) {
-                cb.click();
-            }
-        }");
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('reimport_productization');
-            if (cb && !cb.checked) {
-                cb.click();
-            }
-        }");
-        await page.EvaluateAsync(@"() => {
-            const cb = document.getElementById('generate_shop_params');
-            if (cb && !cb.checked) {
-                cb.click();
-            }
-        }");
-
-        await page.ClickAsync("#choice_import_auctions_toplayer");
-
-        await Task.WhenAny(
-            page.Locator("#info_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 10000 }),
-            page.Locator("#err_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Visible, Timeout = 10000 })
-        );
-        while (true)
-        {
-            bool infoVisible = await page.Locator("#info_toplayer_h").IsVisibleAsync();
-            bool errorVisible = await page.Locator("#err_toplayer_h").IsVisibleAsync();
-
-            if (!infoVisible && !errorVisible)
-            {
-                Debug.WriteLine("khong hien thi nua");
-                break; // Không còn popup nào nữa, thoát vòng lặp
-            }
-
-            if (infoVisible)
-            {
-                Debug.WriteLine("infor");
-
-                var checkboxInfo = page.Locator("#jsfg_ignore_0");
-                await checkboxInfo.WaitForAsync(new() { State = WaitForSelectorState.Visible });
-                await page.EvaluateAsync(@"() => {
-                    const cb = document.getElementById('jsfg_ignore_0');
-                    if (cb && !cb.checked) {
-                        cb.click();
-                    }
-                }");
-                await page.ClickAsync("#btnInfo");
-                await page.Locator("#info_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Hidden });
-            }
-
-            if (errorVisible)
-            {
-                Debug.WriteLine("error");
-
-                var checkboxError = page.Locator("#jsfg_ignoreError_0");
-                await checkboxError.WaitForAsync(new() { State = WaitForSelectorState.Visible });
-                await page.EvaluateAsync(@"() => {
-                    const cb = document.getElementById('jsfg_ignoreError_0');
-                    if (cb && !cb.checked) {
-                        cb.click();
-                    }
-                }");
-                await page.ClickAsync("#btnError");
-                await page.Locator("#err_toplayer_h").WaitForAsync(new() { State = WaitForSelectorState.Hidden });
-            }
-        }
-        await page.Locator("#import_wait-content").WaitForAsync(new()
-        {
-            State = WaitForSelectorState.Hidden,
-            Timeout = 60000
-        });
-
-        await browser.CloseAsync();
-        // Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        // Console.ReadLine(); // giữ thread mở
-        return Results.Ok(new { success = true });
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem("Lỗi: " + ex.Message);
-    }
-});
-
 app.MapPost("/allegro/mapping", async (HttpRequest request) =>
 {
     try
@@ -628,6 +425,13 @@ app.MapPost("/allegro/mapping", async (HttpRequest request) =>
         else
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+
+        //await page.ScreenshotAsync(new() { Path = @"C:\temp\playwright-result.png" });
+        var button = await page.QuerySelectorAsync("button.btn__recovery_password");
+        if (button != null)
+        {
+            await button.ClickAsync();
         }
 
         var buttonNewMapping = page.ClickAsync("#btnNewImport");
