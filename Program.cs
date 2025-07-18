@@ -467,5 +467,88 @@ app.MapPost("/allegro/mapping", async (HttpRequest request) =>
     }
 });
 
+app.MapPost("/allegro/separate-product-size", async (HttpRequest request) =>
+{
+    try
+    {
+        using var reader = new StreamReader(request.Body);
+        var body = await reader.ReadToEndAsync();
+        var json = System.Text.Json.JsonDocument.Parse(body);
+        var productIdsElement = json.RootElement.GetProperty("product_ids");
+
+        var productIds = productIdsElement.EnumerateArray().Select(x => x.GetInt32()).ToList();
+
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
+        });
+        IBrowserContext contextBrowser;
+        if (File.Exists(storageFilePath))
+        {
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
+        }
+        else
+        {
+            contextBrowser = await browser.NewContextAsync();
+        }
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
+
+        var page = await contextBrowser.NewPageAsync();
+        var targetUrl = "https://client4901.idosell.com/panel/main.php";
+        await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        if (isLoginFormVisible)
+        {
+            await page.FillAsync("#panel_login", "vietdao");
+            await page.FillAsync("#panel_password", "Abc@12345");
+            await page.ClickAsync("button[type=submit]");
+            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
+        }
+        else
+        {
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+
+        foreach (var productId in productIds)
+        {
+            var productUrl = $"https://client4901.idosell.com/panel/product.php?idt={productId}#auctions";
+            var productPage = await contextBrowser.NewPageAsync();
+            await productPage.GotoAsync(productUrl);
+            await productPage.ClickAsync("label[for='jsfg_itemSpecificsMode[2][1]_1']");
+
+            await productPage.ClickAsync("#submit_4");
+
+            await productPage.CloseAsync();
+        }
+        await browser.CloseAsync();
+        return Results.Ok(new { success = true });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("Lỗi: " + ex.Message);
+    }
+});
 
 app.Run();
