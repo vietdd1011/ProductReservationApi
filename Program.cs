@@ -551,4 +551,154 @@ app.MapPost("/allegro/separate-product-size", async (HttpRequest request) =>
     }
 });
 
+app.MapPost("/emag/parameters", async (HttpRequest request) =>
+{
+    try
+    {
+        using var reader = new StreamReader(request.Body);
+        var body = await reader.ReadToEndAsync();
+        var json = System.Text.Json.JsonDocument.Parse(body);
+        var category_id = json.RootElement.GetProperty("category_id");
+
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
+        });
+        IBrowserContext contextBrowser;
+        if (File.Exists(storageFilePath))
+        {
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
+        }
+        else
+        {
+            contextBrowser = await browser.NewContextAsync();
+        }
+        //await contextBrowser.RouteAsync("**/*", async route =>
+        //{
+        //    var req = route.Request;
+        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+        //    {
+        //        await route.AbortAsync();
+        //    }
+        //    else
+        //    {
+        //        await route.ContinueAsync();
+        //    }
+        //});
+
+        var page = await contextBrowser.NewPageAsync();
+        var targetUrl = "https://client4901.idosell.com/panel/product.php?idt=543499#auctions";
+        await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        if (isLoginFormVisible)
+        {
+            await page.FillAsync("#panel_login", "vietdao");
+            await page.FillAsync("#panel_password", "Abc@12345");
+            await page.ClickAsync("button[type=submit]");
+            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
+        }
+        else
+        {
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+
+        await page.ClickAsync("#tableRowTabsTitle_501");
+        await page.WaitForSelectorAsync("#fg_auction_category\\[7\\]\\[308\\]_id");
+
+        await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
+        await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
+
+        var tableData = new List<EMagTableParameter>();
+        // Find all table rows in the specific table
+        var rows = await page.Locator("#item_specifics_block_default tbody tr").AllAsync();
+
+        foreach (var row in rows)
+        {
+            var rowData = new EMagTableParameter();
+
+            // Get row ID to identify the type of row
+            var rowId = await row.GetAttributeAsync("id");
+            if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
+                continue;
+
+            // Get description from first column
+            var descriptionCell = row.Locator("td.description").First;
+            if (await descriptionCell.CountAsync() > 0)
+            {
+                var descText = await descriptionCell.InnerTextAsync();
+                rowData.Description = descText.Trim();
+
+                // Check if it's required field
+                var requiredSpan = descriptionCell.Locator("span[style*='color:red']");
+                if (await requiredSpan.CountAsync() > 0)
+                {
+                    rowData.Description += " (REQUIRED)";
+                }
+            }
+
+            // Get second column content
+            var secondCell = row.Locator("td").Nth(1);
+            if (await secondCell.CountAsync() > 0)
+            {
+                // Check if it contains a select element
+                var selectElement = secondCell.Locator("select");
+                if (await selectElement.CountAsync() > 0)
+                {
+                    rowData.FieldType = "SELECT";
+
+                    // Get all option values and texts
+                    var options = await selectElement.Locator("option").AllAsync();
+                    foreach (var option in options)
+                    {
+                        var value = await option.GetAttributeAsync("value") ?? "";
+                        var text = await option.InnerTextAsync();
+
+                        // Skip empty or default options
+                        if (!string.IsNullOrEmpty(text) && text != "Nie wybieraj" && value != "0")
+                        {
+                            rowData.SelectOptions.Add(value);
+                        }
+                    }
+                }
+                else
+                {
+                    // Check if it contains input element
+                    var inputElement = secondCell.Locator("input[type='text']");
+                    if (await inputElement.CountAsync() > 0)
+                    {
+                        rowData.FieldType = "INPUT";
+                        var inputValue = await inputElement.GetAttributeAsync("value") ?? "";
+                        rowData.InputValue = inputValue;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrEmpty(rowData.Description))
+            {
+                tableData.Add(rowData);
+            }
+        }
+        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        //Console.ReadLine();
+
+        await browser.CloseAsync();
+        return Results.Ok(new { success = true, emagParameters = tableData });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("Lỗi: " + ex.Message);
+    }
+});
+
 app.Run();
