@@ -656,16 +656,16 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
                     {
                         paramId = match.Groups[1].Value;
                         rowData.Id = paramId;
-                        checkedIds.Add(cellId); // Thêm vào danh sách đã kiểm tra
+                        checkedIds.Add(cellId);
                     }
                 }
 
                 // Nếu có dấu đỏ thì thêm REQUIRED
-                var requiredSpan = descriptionCell.Locator("span[style*='color:red']");
-                if (await requiredSpan.CountAsync() > 0)
-                {
-                    rowData.Description += " (REQUIRED)";
-                }
+                //var requiredSpan = descriptionCell.Locator("span[style*='color:red']");
+                //if (await requiredSpan.CountAsync() > 0)
+                //{
+                //    rowData.Description += " (REQUIRED)";
+                //}
             }
 
             // Lấy dữ liệu ở cột thứ 2
@@ -713,6 +713,131 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
 
         await browser.CloseAsync();
         return Results.Ok(new { success = true, emagParameters = tableData });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem("Lỗi: " + ex.Message);
+    }
+});
+app.MapPost("/emag/publish-product", async (HttpRequest request) =>
+{
+    try
+    {
+        using var reader = new StreamReader(request.Body);
+        var body = await reader.ReadToEndAsync();
+        var json = System.Text.Json.JsonDocument.Parse(body);
+        var category_id = json.RootElement.GetProperty("category_id");
+        var product_id = json.RootElement.GetProperty("product_id");
+
+        using var playwright = await Playwright.CreateAsync();
+        var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = false,
+            Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
+        });
+        IBrowserContext contextBrowser;
+        if (File.Exists(storageFilePath))
+        {
+            contextBrowser = await browser.NewContextAsync(new BrowserNewContextOptions
+            {
+                StorageStatePath = storageFilePath,
+                BypassCSP = true,
+                RecordVideoDir = null,
+                ViewportSize = null,
+                BaseURL = "https://client4901.idosell.com",
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            });
+        }
+        else
+        {
+            contextBrowser = await browser.NewContextAsync();
+        }
+        //await contextBrowser.RouteAsync("**/*", async route =>
+        //{
+        //    var req = route.Request;
+        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+        //    {
+        //        await route.AbortAsync();
+        //    }
+        //    else
+        //    {
+        //        await route.ContinueAsync();
+        //    }
+        //});
+
+        var page = await contextBrowser.NewPageAsync();
+        var targetUrl = "https://client4901.idosell.com/panel/product.php?idt=" + product_id + "#auctions";
+        await page.GotoAsync(targetUrl);
+        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+        if (isLoginFormVisible)
+        {
+            await page.FillAsync("#panel_login", "vietdao");
+            await page.FillAsync("#panel_password", "Abc@12345");
+            await page.ClickAsync("button[type=submit]");
+            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            await page.GotoAsync(targetUrl);
+        }
+        else
+        {
+            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+
+        // Đợi tab hiển thị và click
+        await page.Locator("#tableRowTabsTitle_501").WaitForAsync(new() { State = WaitForSelectorState.Visible });
+        await page.Locator("#tableRowTabsTitle_501").ClickAsync();
+
+        // Đợi input category hiển thị rồi điền dữ liệu
+        await page.Locator("#fg_auction_category\\[7\\]\\[308\\]_id").WaitForAsync(new() { State = WaitForSelectorState.Visible });
+        await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
+        await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
+
+        // Đợi bảng thật sự load (ít nhất 1 ô description có nội dung)
+        await page.Locator("#item_specifics_block_default tbody tr td.description").First.WaitForAsync();
+
+        // Lấy tất cả các dòng trong bảng
+        var rows = await page.Locator("#item_specifics_block_default tbody tr").AllAsync();
+
+        foreach (var row in rows)
+        {
+            // Bỏ qua các row không phải dữ liệu
+            var rowId = await row.GetAttributeAsync("id");
+            if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
+                continue;
+
+            // Lấy description
+            var descriptionCell = row.Locator("td.description").First;
+            if (await descriptionCell.CountAsync() > 0)
+            {
+                var descText = await descriptionCell.InnerTextAsync();
+                if (descText.Trim() == "Culoare: (required)")
+                {
+                    // Lấy cell thứ 2
+                    var secondCell = row.Locator("td").Nth(1);
+
+                    // Nếu là select
+                    var selectElement = secondCell.Locator("select");
+                    if (await selectElement.CountAsync() > 0)
+                    {
+                        // Chọn option "Maro"
+                        await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = "Maro" } });
+                    }
+                    else
+                    {
+                        // Nếu là input
+                        var inputElement = secondCell.Locator("input");
+                        if (await inputElement.CountAsync() > 0)
+                        {
+                            await inputElement.FillAsync("Maro");
+                        }
+                    }
+                    break; // Đã điền xong, thoát vòng lặp
+                }
+            }
+        }
+        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        Console.ReadLine();
+        await browser.CloseAsync();
+        return Results.Ok(new { success = true });
     }
     catch (Exception ex)
     {
