@@ -629,7 +629,7 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
         var rows = await page.Locator("#item_specifics_block_default tbody tr").AllAsync();
 
         var tableData = new List<EMagTableParameter>();
-
+        var checkedIds = new List<string>(); // Danh sách để kiểm tra trùng lặp
         foreach (var row in rows)
         {
             var rowData = new EMagTableParameter();
@@ -645,6 +645,20 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
             {
                 var descText = await descriptionCell.InnerTextAsync();
                 rowData.Description = descText.Trim();
+                var cellId = await descriptionCell.GetAttributeAsync("id");
+                if (checkedIds.Contains(cellId)) continue;
+                var paramId = "";
+                if (!string.IsNullOrEmpty(cellId))
+                {
+                    //var match = Regex.Match(cellId, @"^[a-z_]*fid_308_(-?\d+)_default$");
+                    var match = Regex.Match(cellId, @"td_d_fid_308_(-?\d+).*?_default");
+                    if (match.Success)
+                    {
+                        paramId = match.Groups[1].Value;
+                        rowData.Id = paramId;
+                        checkedIds.Add(cellId); // Thêm vào danh sách đã kiểm tra
+                    }
+                }
 
                 // Nếu có dấu đỏ thì thêm REQUIRED
                 var requiredSpan = descriptionCell.Locator("span[style*='color:red']");
