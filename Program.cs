@@ -563,7 +563,7 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
         {
-            Headless = true,
+            Headless = false,
             Args = new[] { "--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage" }
         });
         IBrowserContext contextBrowser;
@@ -613,33 +613,40 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
 
-        await page.ClickAsync("#tableRowTabsTitle_501");
-        await page.WaitForSelectorAsync("#fg_auction_category\\[7\\]\\[308\\]_id");
+        // Đợi tab hiển thị và click
+        await page.Locator("#tableRowTabsTitle_501").WaitForAsync(new() { State = WaitForSelectorState.Visible });
+        await page.Locator("#tableRowTabsTitle_501").ClickAsync();
 
+        // Đợi input category hiển thị rồi điền dữ liệu
+        await page.Locator("#fg_auction_category\\[7\\]\\[308\\]_id").WaitForAsync(new() { State = WaitForSelectorState.Visible });
         await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
         await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
 
-        var tableData = new List<EMagTableParameter>();
-        // Find all table rows in the specific table
+        // Đợi bảng thật sự load (ít nhất 1 ô description có nội dung)
+        await page.Locator("#item_specifics_block_default tbody tr td.description").First.WaitForAsync();
+
+        // Lấy tất cả các dòng trong bảng
         var rows = await page.Locator("#item_specifics_block_default tbody tr").AllAsync();
+
+        var tableData = new List<EMagTableParameter>();
 
         foreach (var row in rows)
         {
             var rowData = new EMagTableParameter();
 
-            // Get row ID to identify the type of row
+            // Bỏ qua các row không phải dữ liệu
             var rowId = await row.GetAttributeAsync("id");
             if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
                 continue;
 
-            // Get description from first column
+            // Lấy description
             var descriptionCell = row.Locator("td.description").First;
             if (await descriptionCell.CountAsync() > 0)
             {
                 var descText = await descriptionCell.InnerTextAsync();
                 rowData.Description = descText.Trim();
 
-                // Check if it's required field
+                // Nếu có dấu đỏ thì thêm REQUIRED
                 var requiredSpan = descriptionCell.Locator("span[style*='color:red']");
                 if (await requiredSpan.CountAsync() > 0)
                 {
@@ -647,24 +654,22 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
                 }
             }
 
-            // Get second column content
+            // Lấy dữ liệu ở cột thứ 2
             var secondCell = row.Locator("td").Nth(1);
             if (await secondCell.CountAsync() > 0)
             {
-                // Check if it contains a select element
+                // Nếu là select
                 var selectElement = secondCell.Locator("select");
                 if (await selectElement.CountAsync() > 0)
                 {
                     rowData.FieldType = "SELECT";
 
-                    // Get all option values and texts
                     var options = await selectElement.Locator("option").AllAsync();
                     foreach (var option in options)
                     {
                         var value = await option.GetAttributeAsync("value") ?? "";
                         var text = await option.InnerTextAsync();
 
-                        // Skip empty or default options
                         if (!string.IsNullOrEmpty(text) && text != "Nie wybieraj" && value != "0")
                         {
                             rowData.SelectOptions.Add(value);
@@ -673,7 +678,7 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
                 }
                 else
                 {
-                    // Check if it contains input element
+                    // Nếu là input text
                     var inputElement = secondCell.Locator("input[type='text']");
                     if (await inputElement.CountAsync() > 0)
                     {
