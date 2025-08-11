@@ -727,7 +727,7 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body);
         var category_id = json.RootElement.GetProperty("category_id");
-        var product_id = json.RootElement.GetProperty("product_id");
+        var product_ids = json.RootElement.GetProperty("product_ids");
 
         using var playwright = await Playwright.CreateAsync();
         var browser = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
@@ -752,88 +752,126 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
         {
             contextBrowser = await browser.NewContextAsync();
         }
-        //await contextBrowser.RouteAsync("**/*", async route =>
-        //{
-        //    var req = route.Request;
-        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-        //    {
-        //        await route.AbortAsync();
-        //    }
-        //    else
-        //    {
-        //        await route.ContinueAsync();
-        //    }
-        //});
+
+        var client = new HttpClient();
+        var sendRequest = new HttpRequestMessage(HttpMethod.Post, "https://rftools.royalfashion.pl/api/marketplaces/products");
+        sendRequest.Headers.Add("Authorization", "lPwwE85yG8jDOD1HC7d4qRgTppwaElYD");
+        var content = new StringContent(
+            "{\"marketplace_id\": 4, \"product_ids\":" + product_ids + "}",
+            System.Text.Encoding.UTF8,
+            "application/json"
+        );
+        sendRequest.Content = content;
+        var response = await client.SendAsync(sendRequest);
+        response.EnsureSuccessStatusCode();
+        var responseString = await response.Content.ReadAsStringAsync();
+        var productsResponse = JsonSerializer.Deserialize<EmagProductsResponse>(responseString);
 
         var page = await contextBrowser.NewPageAsync();
-        var targetUrl = "https://client4901.idosell.com/panel/product.php?idt=" + product_id + "#auctions";
-        await page.GotoAsync(targetUrl);
-        bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
-        if (isLoginFormVisible)
+        foreach (var product in productsResponse.Products)
         {
-            await page.FillAsync("#panel_login", "vietdao");
-            await page.FillAsync("#panel_password", "Abc@12345");
-            await page.ClickAsync("button[type=submit]");
-            await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+            var targetUrl = "https://client4901.idosell.com/panel/product.php?idt=" + product.Id + "#auctions";
             await page.GotoAsync(targetUrl);
-        }
-        else
-        {
-            Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
-        }
-
-        // Đợi tab hiển thị và click
-        await page.Locator("#tableRowTabsTitle_501").WaitForAsync(new() { State = WaitForSelectorState.Visible });
-        await page.Locator("#tableRowTabsTitle_501").ClickAsync();
-
-        // Đợi input category hiển thị rồi điền dữ liệu
-        await page.Locator("#fg_auction_category\\[7\\]\\[308\\]_id").WaitForAsync(new() { State = WaitForSelectorState.Visible });
-        await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
-        await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
-
-        // Đợi bảng thật sự load (ít nhất 1 ô description có nội dung)
-        await page.Locator("#item_specifics_block_default tbody tr td.description").First.WaitForAsync();
-
-        // Lấy tất cả các dòng trong bảng
-        var rows = await page.Locator("#item_specifics_block_default tbody tr").AllAsync();
-
-        foreach (var row in rows)
-        {
-            // Bỏ qua các row không phải dữ liệu
-            var rowId = await row.GetAttributeAsync("id");
-            if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
-                continue;
-
-            // Lấy description
-            var descriptionCell = row.Locator("td.description").First;
-            if (await descriptionCell.CountAsync() > 0)
+            bool isLoginFormVisible = await page.Locator("#panel_login").IsVisibleAsync();
+            if (isLoginFormVisible)
             {
-                var descText = await descriptionCell.InnerTextAsync();
-                if (descText.Trim() == "Culoare: (required)")
-                {
-                    // Lấy cell thứ 2
-                    var secondCell = row.Locator("td").Nth(1);
+                await page.FillAsync("#panel_login", "vietdao");
+                await page.FillAsync("#panel_password", "Abc@12345");
+                await page.ClickAsync("button[type=submit]");
+                await contextBrowser.StorageStateAsync(new BrowserContextStorageStateOptions { Path = "storageState.json" });
+                await page.GotoAsync(targetUrl);
+            }
+            else
+            {
+                Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+            }
 
-                    // Nếu là select
-                    var selectElement = secondCell.Locator("select");
-                    if (await selectElement.CountAsync() > 0)
+            await page.Locator("label[for='jsfg_auctions_details_service_list_2']").WaitForAsync(new()
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 30000
+            });
+            await page.Locator("label[for='jsfg_auctions_details_service_list_2']").ClickAsync();
+
+            await page.Locator("#tableRowTabsTitle_501").WaitForAsync(new() { State = WaitForSelectorState.Visible });
+            await page.Locator("#tableRowTabsTitle_501").ClickAsync();
+
+            await page.Locator("#fg_auction_category\\[7\\]\\[308\\]_id").WaitForAsync(new() { State = WaitForSelectorState.Visible });
+            await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
+            await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
+
+            await page.Locator("#additional_params_7_308 #item_specifics_block_default").WaitForAsync(new()
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 15000
+            });
+            var rows = await page.Locator("#additional_params_7_308 #item_specifics_block_default tbody tr").AllAsync();
+            foreach (var row in rows)
+            {
+                var rowId = await row.GetAttributeAsync("id");
+                if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
+                    continue;
+
+                var descriptionCell = row.Locator("td.description").First;
+                if (await descriptionCell.CountAsync() > 0)
+                {
+                    var descText = await descriptionCell.InnerTextAsync();
+
+                    // Tìm param tương ứng trong product.Params
+                    var matchedParam = product.Params.FirstOrDefault(p => p.Param.Trim() == descText.Trim());
+
+                    if (matchedParam != null)
                     {
-                        // Chọn option "Maro"
-                        await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = "Maro" } });
-                    }
-                    else
-                    {
-                        // Nếu là input
-                        var inputElement = secondCell.Locator("input");
-                        if (await inputElement.CountAsync() > 0)
+                        var secondCell = row.Locator("td").Nth(1);
+
+                        var selectElement = secondCell.Locator("select");
+                        if (await selectElement.CountAsync() > 0)
                         {
-                            await inputElement.FillAsync("Maro");
+                            await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = matchedParam.Value } });
+                        }
+                        else
+                        {
+                            var inputElement = secondCell.Locator("input");
+                            if (await inputElement.CountAsync() > 0)
+                            {
+                                await inputElement.FillAsync(matchedParam.Value);
+                            }
                         }
                     }
-                    break; // Đã điền xong, thoát vòng lặp
                 }
             }
+
+            await page.Locator("a.nohref.nohrefmenu.btn.btn-no-border.btn-outline.mr10")
+                .Filter(new() { HasText = "Post an offer" })
+                .ClickAsync();
+
+            // Bước 2: Chờ popup window_ast_picker hiển thị
+            await page.Locator("#window_ast_picker").WaitForAsync(new()
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 15000
+            });
+            // Bước 3: Chọn "paul emag" trong select fg_preset
+            await page.Locator("#fg_preset").SelectOptionAsync(new[] {
+                new SelectOptionValue() { Label = "paul emag" }
+            });
+
+            // Bước 4: Click button picker_submit_btn
+            await page.Locator("#picker_submit_btn").ClickAsync();
+
+            // Bước 5: Chờ popup window_auction_schedule hiển thị
+            await page.Locator("#window_auction_schedule").WaitForAsync(new()
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 15000
+            });
+
+            // Bước 6: Click button "Issue" trong popup
+            // await page.Locator("#window_auction_schedule input[type='button'][value='Issue']").ClickAsync();
+            // Chờ một chút để action hoàn thành
+            await page.WaitForTimeoutAsync(2000);
         }
+
         Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
         Console.ReadLine();
         await browser.CloseAsync();
