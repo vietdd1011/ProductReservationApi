@@ -853,7 +853,7 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             });
             // Bước 3: Chọn "paul emag" trong select fg_preset
             await page.Locator("#fg_preset").SelectOptionAsync(new[] {
-                new SelectOptionValue() { Label = "paul emag" }
+                new SelectOptionValue() { Label = "paul emag - Kopia" }
             });
 
             // Bước 4: Click button picker_submit_btn
@@ -867,7 +867,7 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             });
 
             // Bước 6: Click button "Issue" trong popup
-            // await page.Locator("#window_auction_schedule input[type='button'][value='Issue']").ClickAsync();
+            await page.Locator("#window_auction_schedule input[type='button'][value='Issue']").ClickAsync();
             // Chờ một chút để action hoàn thành
             await page.WaitForTimeoutAsync(2000);
         }
