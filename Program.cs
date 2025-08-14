@@ -766,6 +766,7 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
         response.EnsureSuccessStatusCode();
         var responseString = await response.Content.ReadAsStringAsync();
         var productsResponse = JsonSerializer.Deserialize<EmagProductsResponse>(responseString);
+        var sizes = new object[] { 19, 21, "B", "D", "F", "H" };
 
         var page = await contextBrowser.NewPageAsync();
         foreach (var product in productsResponse.Products)
@@ -800,41 +801,122 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
             await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
 
-            await page.Locator("#additional_params_7_308 #item_specifics_block_default").WaitForAsync(new()
-            {
-                State = WaitForSelectorState.Visible,
-                Timeout = 15000
-            });
-            var rows = await page.Locator("#additional_params_7_308 #item_specifics_block_default tbody tr").AllAsync();
-            foreach (var row in rows)
-            {
-                var rowId = await row.GetAttributeAsync("id");
-                if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
-                    continue;
+            await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").ClickAsync();
 
-                var descriptionCell = row.Locator("td.description").First;
-                if (await descriptionCell.CountAsync() > 0)
+            foreach (var size in sizes)
+            {
+                await page.Locator("#additional_params_7_308 #item_specifics_block_" + size).WaitForAsync(new()
                 {
-                    var descText = await descriptionCell.InnerTextAsync();
+                    State = WaitForSelectorState.Visible,
+                    Timeout = 15000
+                });
+                // Lấy size từ tr đầu tiên
+                var extractedSize = string.Empty;
+                var titleCell = page.Locator("#additional_params_7_308 #item_specifics_block_" + size + " tr:first-child td.title");
+                if (await titleCell.CountAsync() > 0)
+                {
+                    var titleText = await titleCell.InnerTextAsync();
+                    // titleText sẽ là "Size: 36[expand]"
 
-                    // Tìm param tương ứng trong product.Params
-                    var matchedParam = product.Params.FirstOrDefault(p => p.Param.Trim() == descText.Trim());
-
-                    if (matchedParam != null)
+                    // Extract size value
+                    var sizeMatch = System.Text.RegularExpressions.Regex.Match(titleText, @"Size:\s*(\d+)");
+                    if (sizeMatch.Success)
                     {
-                        var secondCell = row.Locator("td").Nth(1);
+                        extractedSize = sizeMatch.Groups[1].Value + " EU";
+                    }
+                }
 
-                        var selectElement = secondCell.Locator("select");
-                        if (await selectElement.CountAsync() > 0)
+                var expandLink = page.Locator("#additional_params_7_308 #item_specifics_block_" + size + " tr:first-child td.title a");
+                if (await expandLink.CountAsync() > 0)
+                {
+                    await expandLink.ClickAsync();
+                    // Có thể cần đợi một chút sau khi expand
+                    await page.WaitForTimeoutAsync(2000);
+                }
+                var rows = await page.Locator("#additional_params_7_308 #item_specifics_block_" + size + " tbody tr").AllAsync();
+                foreach (var row in rows)
+                {
+                    var rowId = await row.GetAttributeAsync("id");
+                    if (string.IsNullOrEmpty(rowId) || rowId.Contains("header") || rowId.Contains("btns"))
+                        continue;
+
+                    var descriptionCell = row.Locator("td.description").First;
+                    if (await descriptionCell.CountAsync() > 0)
+                    {
+                        var descText = await descriptionCell.InnerTextAsync();
+                        if (descText == "Marime: (Tag: original)" && extractedSize != string.Empty)
                         {
-                            await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = matchedParam.Value } });
+                            var secondCell = row.Locator("td").Nth(1);
+                            var selectElement = secondCell.Locator("select");
+                            if (await selectElement.CountAsync() > 0)
+                            {
+                                await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = extractedSize } });
+                                var addButton = row.Locator(".addParamBtnsSection button.btnAddParameterToShop");
+                                if (await addButton.CountAsync() > 0)
+                                {
+                                    await addButton.ClickAsync();
+                                    // Đợi popup xuất hiện
+                                    await page.WaitForSelectorAsync("#addParameterTopLayer_h", new()
+                                    {
+                                        State = WaitForSelectorState.Visible,
+                                        Timeout = 10000
+                                    });
+                                    var submitButton = page.Locator("#form_addParameterFromAuction input[type='submit'][value='Add']");
+                                    if (await submitButton.CountAsync() > 0)
+                                    {
+                                        await submitButton.ClickAsync();
+                                        // Đợi popup đóng
+                                        await page.WaitForSelectorAsync("#addParameterTopLayer_h", new()
+                                        {
+                                            State = WaitForSelectorState.Hidden,
+                                            Timeout = 10000
+                                        });
+                                    }
+                                }
+                            }
                         }
                         else
                         {
-                            var inputElement = secondCell.Locator("input");
-                            if (await inputElement.CountAsync() > 0)
+                            // Tìm param tương ứng trong product.Params
+                            var matchedParam = product.Params.FirstOrDefault(p => p.Param.Trim() == descText.Trim());
+                            if (matchedParam != null)
                             {
-                                await inputElement.FillAsync(matchedParam.Value);
+                                var secondCell = row.Locator("td").Nth(1);
+                                var selectElement = secondCell.Locator("select");
+                                if (await selectElement.CountAsync() > 0)
+                                {
+                                    await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = matchedParam.Value } });
+                                    var addButton = row.Locator(".addParamBtnsSection button.btnAddParameterToShop");
+                                    if (await addButton.CountAsync() > 0)
+                                    {
+                                        await addButton.ClickAsync();
+                                        // Đợi popup xuất hiện
+                                        await page.WaitForSelectorAsync("#addParameterTopLayer_h", new()
+                                        {
+                                            State = WaitForSelectorState.Visible,
+                                            Timeout = 10000
+                                        });
+                                        var submitButton = page.Locator("#form_addParameterFromAuction input[type='submit'][value='Add']");
+                                        if (await submitButton.CountAsync() > 0)
+                                        {
+                                            await submitButton.ClickAsync();
+                                            // Đợi popup đóng
+                                            await page.WaitForSelectorAsync("#addParameterTopLayer_h", new()
+                                            {
+                                                State = WaitForSelectorState.Hidden,
+                                                Timeout = 10000
+                                            });
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    var inputElement = secondCell.Locator("input");
+                                    if (await inputElement.CountAsync() > 0)
+                                    {
+                                        await inputElement.FillAsync(matchedParam.Value);
+                                    }
+                                }
                             }
                         }
                     }
