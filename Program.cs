@@ -801,6 +801,11 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
             await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
 
+            await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").WaitForAsync(new()
+            {
+                State = WaitForSelectorState.Visible,
+                Timeout = 30000
+            });
             await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").ClickAsync();
 
             foreach (var size in sizes)
@@ -844,7 +849,7 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
                     if (await descriptionCell.CountAsync() > 0)
                     {
                         var descText = await descriptionCell.InnerTextAsync();
-                        if (descText == "Marime: (Tag: original)" && extractedSize != string.Empty)
+                        if ((descText == "Marime: (Tag: original)" || descText == "Marime convertita" || descText == "Marime: (Tag: converted)") && extractedSize != string.Empty)
                         {
                             var secondCell = row.Locator("td").Nth(1);
                             var selectElement = secondCell.Locator("select");
@@ -871,6 +876,41 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
                                             State = WaitForSelectorState.Hidden,
                                             Timeout = 10000
                                         });
+                                        await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").ClickAsync();
+                                        await expandLink.ClickAsync();
+                                    }
+                                }
+                            }
+                        }
+                        else if (descText == "Brand")
+                        {
+                            var secondCell = row.Locator("td").Nth(1);
+                            var inputElement = secondCell.Locator("input");
+                            if (await inputElement.CountAsync() > 0)
+                            {
+                                await inputElement.FillAsync("Royalfashion");
+                                var addButton = row.Locator(".addParamBtnsSection button.btnAddParameterToShop");
+                                if (await addButton.CountAsync() > 0)
+                                {
+                                    await addButton.ClickAsync();
+                                    // Đợi popup xuất hiện
+                                    await page.WaitForSelectorAsync("#addParameterTopLayer_h", new()
+                                    {
+                                        State = WaitForSelectorState.Visible,
+                                        Timeout = 10000
+                                    });
+                                    var submitButton = page.Locator("#form_addParameterFromAuction input[type='submit'][value='Add']");
+                                    if (await submitButton.CountAsync() > 0)
+                                    {
+                                        await submitButton.ClickAsync();
+                                        // Đợi popup đóng
+                                        await page.WaitForSelectorAsync("#addParameterTopLayer_h", new()
+                                        {
+                                            State = WaitForSelectorState.Hidden,
+                                            Timeout = 10000
+                                        });
+                                        await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").ClickAsync();
+                                        await expandLink.ClickAsync();
                                     }
                                 }
                             }
@@ -879,12 +919,19 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
                         {
                             // Tìm param tương ứng trong product.Params
                             var matchedParam = product.Params.FirstOrDefault(p => p.Param.Trim() == descText.Trim());
-                            if (matchedParam != null)
+                            if (matchedParam != null && matchedParam.Value != "null")
                             {
                                 var secondCell = row.Locator("td").Nth(1);
                                 var selectElement = secondCell.Locator("select");
                                 if (await selectElement.CountAsync() > 0)
                                 {
+                                    var availableOptions = await selectElement.Locator("option").AllTextContentsAsync();
+                                    // Kiểm tra xem matchedParam.Value có trong danh sách options không
+                                    if (!availableOptions.Any(option => option.Trim().Equals(matchedParam.Value.Trim(), StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        continue; // Nếu không có thì bỏ qua
+                                    }
+
                                     await selectElement.SelectOptionAsync(new[] { new SelectOptionValue() { Label = matchedParam.Value } });
                                     var addButton = row.Locator(".addParamBtnsSection button.btnAddParameterToShop");
                                     if (await addButton.CountAsync() > 0)
@@ -906,6 +953,8 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
                                                 State = WaitForSelectorState.Hidden,
                                                 Timeout = 10000
                                             });
+                                            await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").ClickAsync();
+                                            await expandLink.ClickAsync();
                                         }
                                     }
                                 }
@@ -954,8 +1003,8 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             await page.WaitForTimeoutAsync(2000);
         }
 
-        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        Console.ReadLine();
+        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        //Console.ReadLine();
         await browser.CloseAsync();
         return Results.Ok(new { success = true });
     }
