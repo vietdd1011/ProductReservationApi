@@ -14,6 +14,9 @@ namespace ProductReservationApi.Models
         public int Id { get; set; }
         [JsonPropertyName("params")]
         public List<EmagProductParams> Params { get; set; } = new List<EmagProductParams>();
+
+        [JsonPropertyName("category_id")]
+        public int CategoryId { get; set; }
     }
 
     public class  EmagProductParams

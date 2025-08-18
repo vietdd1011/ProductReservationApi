@@ -726,7 +726,6 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
         using var reader = new StreamReader(request.Body);
         var body = await reader.ReadToEndAsync();
         var json = System.Text.Json.JsonDocument.Parse(body);
-        var category_id = json.RootElement.GetProperty("category_id");
         var product_ids = json.RootElement.GetProperty("product_ids");
 
         using var playwright = await Playwright.CreateAsync();
@@ -798,7 +797,7 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             await page.Locator("#tableRowTabsTitle_501").ClickAsync();
 
             await page.Locator("#fg_auction_category\\[7\\]\\[308\\]_id").WaitForAsync(new() { State = WaitForSelectorState.Visible });
-            await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", category_id.ToString());
+            await page.FillAsync("#fg_auction_category\\[7\\]\\[308\\]_id", product.CategoryId.ToString());
             await page.ClickAsync("#fg_auction_category\\[7\\]\\[308\\]_id_choose");
 
             await page.Locator("label[for='jsfg_itemSpecificsMode[7][308]_1']").WaitForAsync(new()
