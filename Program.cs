@@ -530,6 +530,11 @@ app.MapPost("/allegro/separate-product-size", async (HttpRequest request) =>
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
         }
+        var button = await page.QuerySelectorAsync("button.btn__recovery_password");
+        if (button != null)
+        {
+            await button.ClickAsync();
+        }
 
         foreach (var productId in productIds)
         {
@@ -611,6 +616,11 @@ app.MapPost("/emag/parameters", async (HttpRequest request) =>
         else
         {
             Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+        }
+        var button = await page.QuerySelectorAsync("button.btn__recovery_password");
+        if (button != null)
+        {
+            await button.ClickAsync();
         }
 
         // Đợi tab hiển thị và click
@@ -784,6 +794,11 @@ app.MapPost("/emag/publish-product", async (HttpRequest request) =>
             else
             {
                 Console.WriteLine("Session còn hiệu lực. Đã đăng nhập.");
+            }
+            var button = await page.QuerySelectorAsync("button.btn__recovery_password");
+            if (button != null)
+            {
+                await button.ClickAsync();
             }
 
             await page.Locator("label[for='jsfg_auctions_details_service_list_2']").WaitForAsync(new()
