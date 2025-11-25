@@ -1102,9 +1102,12 @@ app.MapPost("/products/priority", async (HttpRequest request) =>
             }
 
             //nhap input co id = priority voi gia tri bang priority
-            await page.FillAsync("#priority", priority.ToString());
+            await page.ClickAsync("#priority");
+            await page.FillAsync("#priority", ""); // clear
+            await page.TypeAsync("#priority", priority.ToString());
             await page.ClickAsync("#btn_visibility_form");
             //sau do submit form btn_visibility_form
+            await page.WaitForTimeoutAsync(1000);
 
         }
 
