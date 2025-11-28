@@ -1064,18 +1064,18 @@ app.MapPost("/products/priority", async (HttpRequest request) =>
         {
             contextBrowser = await browser.NewContextAsync();
         }
-        //await contextBrowser.RouteAsync("**/*", async route =>
-        //{
-        //    var req = route.Request;
-        //    if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
-        //    {
-        //        await route.AbortAsync();
-        //    }
-        //    else
-        //    {
-        //        await route.ContinueAsync();
-        //    }
-        //});
+        await contextBrowser.RouteAsync("**/*", async route =>
+        {
+            var req = route.Request;
+            if (req.ResourceType == "image" || req.ResourceType == "font" || req.ResourceType == "stylesheet")
+            {
+                await route.AbortAsync();
+            }
+            else
+            {
+                await route.ContinueAsync();
+            }
+        });
 
         var page = await contextBrowser.NewPageAsync();
         foreach (var product_id in productIds)
@@ -1121,9 +1121,9 @@ app.MapPost("/products/priority", async (HttpRequest request) =>
 
         }
 
-        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        Console.ReadLine();
-        //await browser.CloseAsync();
+        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        //Console.ReadLine();
+        await browser.Closeasync();
         return Results.Ok(new { success = true });
     }
     catch (Exception ex)
