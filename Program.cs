@@ -1105,15 +1105,25 @@ app.MapPost("/products/priority", async (HttpRequest request) =>
             await page.ClickAsync("#priority");
             await page.FillAsync("#priority", ""); // clear
             await page.TypeAsync("#priority", priority.ToString());
+
+            await page.ClickAsync("a#product-edit-aceform-stocks-elem-207");
+
+            await page.ClickAsync("#fg_allNodesPriority");
+            await page.TypeAsync("#fg_allNodesPriority", priority.ToString());
+
+            await page.ClickAsync("#form_menuPriorityToplayer input[type='submit']");
+            var closeButton = page.Locator(".close_dialog");
+            await closeButton.ClickAsync();
+
             await page.ClickAsync("#btn_visibility_form");
             //sau do submit form btn_visibility_form
             await page.WaitForTimeoutAsync(1000);
 
         }
 
-        //Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
-        //Console.ReadLine();
-        await browser.CloseAsync();
+        Console.WriteLine("Script chạy xong. Nhấn Enter để đóng...");
+        Console.ReadLine();
+        //await browser.CloseAsync();
         return Results.Ok(new { success = true });
     }
     catch (Exception ex)
